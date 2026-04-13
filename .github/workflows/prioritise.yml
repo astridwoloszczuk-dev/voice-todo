@@ -1,0 +1,21 @@
+name: Prioritise Tasks
+on:
+  schedule:
+    - cron: '0 10 * * 1-6'  # Noon CEST Mon-Sat
+    - cron: '0 11 * * 0'    # 1pm CEST Sunday
+  workflow_dispatch:
+jobs:
+  prioritise:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r scripts/requirements.txt
+      - run: python scripts/prioritise.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}

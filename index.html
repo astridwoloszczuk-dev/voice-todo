@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Voice Todo</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header>
+    <h1>Voice Todo</h1>
+    <div id="status-dot" class="status-dot offline" title="Connection status"></div>
+  </header>
+
+  <!-- Views -->
+  <main id="view-list" class="view active">
+    <div id="sync-banner" class="banner hidden">
+      <span id="sync-count"></span> offline item(s) — <button onclick="app.syncQueue()">Sync now</button>
+    </div>
+    <div id="filter-bar">
+      <button class="filter-btn active" data-status="pending" onclick="app.setFilter('pending',this)">Pending</button>
+      <button class="filter-btn" data-status="all" onclick="app.setFilter('all',this)">All</button>
+    </div>
+    <div id="todo-list"></div>
+    <div id="empty-state" class="hidden">
+      <p>No tasks here.<br>Tap the mic to add one!</p>
+    </div>
+  </main>
+
+  <main id="view-record" class="view hidden">
+    <div class="record-center">
+      <button id="mic-btn" class="mic-btn" onclick="app.toggleRecording()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          <line x1="12" y1="19" x2="12" y2="23"/>
+          <line x1="8" y1="23" x2="16" y2="23"/>
+        </svg>
+      </button>
+      <p id="record-hint">Tap to speak your task</p>
+      <div id="transcript-box" class="hidden">
+        <p id="transcript-text"></p>
+        <div class="transcript-actions">
+          <button class="btn btn-primary" onclick="app.submitTranscript()">Add Task</button>
+          <button class="btn btn-ghost" onclick="app.clearTranscript()">Discard</button>
+        </div>
+      </div>
+      <div id="manual-input" class="manual-input">
+        <p class="or-divider">— or type —</p>
+        <div class="input-row">
+          <input id="manual-text" type="text" placeholder="Type a task…" onkeydown="if(event.key==='Enter')app.submitManual()">
+          <button class="btn btn-primary" onclick="app.submitManual()">Add</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <main id="view-digest" class="view hidden">
+    <div class="digest-header">
+      <h2>Daily Digest</h2>
+      <button class="btn btn-ghost" onclick="app.loadDigest()">Refresh</button>
+    </div>
+    <div id="digest-content" class="digest-content">
+      <p class="muted">Loading digest…</p>
+    </div>
+  </main>
+
+  <!-- Bottom nav -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-view="list" onclick="app.showView('list',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+        <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
+        <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+      </svg>
+      <span>Tasks</span>
+    </button>
+    <button class="nav-btn" data-view="record" onclick="app.showView('record',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4" fill="currentColor" stroke="none"/>
+      </svg>
+      <span>Add</span>
+    </button>
+    <button class="nav-btn" data-view="digest" onclick="app.showView('digest',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span>Digest</span>
+    </button>
+  </nav>
+
+</div>
+
+<!-- Todo detail modal -->
+<div id="modal-overlay" class="modal-overlay hidden" onclick="if(event.target===this)app.closeModal()">
+  <div class="modal">
+    <h3 id="modal-task-text"></h3>
+    <div id="modal-fields"></div>
+    <div class="modal-actions">
+      <button class="btn btn-success" onclick="app.completeTodo()">Mark done</button>
+      <button id="modal-calendar-btn" class="btn btn-secondary" onclick="app.openCalendar()">Add to Calendar</button>
+      <button class="btn btn-danger" onclick="app.deleteTodo()">Delete</button>
+      <button class="btn btn-ghost" onclick="app.closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./app.js"></script>
+</body>
+</html>
