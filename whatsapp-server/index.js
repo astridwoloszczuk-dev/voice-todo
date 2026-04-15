@@ -30,9 +30,19 @@ async function handleInbound(message) {
   const text = message.body.trim();
   if (!text) return;
 
-  console.log(`DEBUG from=${message.from} author=${message.author} to=${message.to} body=${text.slice(0, 50)}`);
-
-  const number = waIdToE164(message.from);
+  let number;
+  if (message.from.endsWith('@lid')) {
+    // Multi-device LID format — resolve to actual phone number via contact lookup
+    try {
+      const contact = await message.getContact();
+      number = '+' + contact.number;
+    } catch (e) {
+      console.log(`Could not resolve LID ${message.from}: ${e.message}`);
+      return;
+    }
+  } else {
+    number = waIdToE164(message.from);
+  }
 
   // Look up sender in people table
   const { data: people, error } = await supa
