@@ -1,0 +1,4 @@
+whatsapp-server/node_modules/
+whatsapp-server/.wwebjs_auth/
+whatsapp-server/.wwebjs_cache/
+whatsapp-server/.env
