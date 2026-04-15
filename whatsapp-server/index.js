@@ -30,6 +30,8 @@ async function handleInbound(message) {
   const text = message.body.trim();
   if (!text) return;
 
+  console.log(`DEBUG from=${message.from} author=${message.author} to=${message.to} body=${text.slice(0, 50)}`);
+
   const number = waIdToE164(message.from);
 
   // Look up sender in people table
