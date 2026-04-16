@@ -36,9 +36,15 @@ async function findPersonByNumber(number) {
   return people.find(p => p.whatsapp_number === number && !p.is_bot) || null;
 }
 
+const NAME_ALIASES = {
+  mum: 'Astrid', mom: 'Astrid', mama: 'Astrid', mother: 'Astrid',
+  dad: 'Niko', papa: 'Niko', father: 'Niko',
+};
+
 async function findPersonByName(name) {
   const people = await getPeople();
-  return people.find(p => p.name.toLowerCase() === name.toLowerCase() && !p.is_bot) || null;
+  const resolved = NAME_ALIASES[name.toLowerCase()] || name;
+  return people.find(p => p.name.toLowerCase() === resolved.toLowerCase() && !p.is_bot) || null;
 }
 
 // ── Number helpers ───────────────────────────────────────────────────────────
