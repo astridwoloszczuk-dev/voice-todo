@@ -47,10 +47,11 @@ async function dbLoadTodos() {
     const req = store.getAll();
     req.onsuccess = () => {
       const todos = req.result || [];
-      // Sort: priority nulls last, then by priority asc, then created_at asc
+      // Sort: priority nulls last, then by priority order, then created_at asc
+      const PRI_ORDER = { high: 1, medium: 2, low: 3, someday: 4 };
       todos.sort((a, b) => {
-        const pa = a.priority == null ? Infinity : a.priority;
-        const pb = b.priority == null ? Infinity : b.priority;
+        const pa = a.priority == null ? Infinity : (PRI_ORDER[a.priority] ?? Infinity);
+        const pb = b.priority == null ? Infinity : (PRI_ORDER[b.priority] ?? Infinity);
         if (pa !== pb) return pa - pb;
         return (a.created_at || '').localeCompare(b.created_at || '');
       });
@@ -218,7 +219,7 @@ const app = {
       work: '💼', personal: '👤', health: '🏃', finance: '💰',
       household: '🏠', social: '👥', learning: '📚', errands: '🛒', general: '📝'
     };
-    const priLabels = { 1: 'Urgent', 2: 'High', 3: 'Medium', 4: 'Low', 5: 'Someday' };
+    const priLabels = { high: 'High', medium: 'Medium', low: 'Low', someday: 'Someday' };
 
     todos.forEach(t => {
       const card = document.createElement('div');
@@ -247,7 +248,7 @@ const app = {
         priChip.textContent = '⏳ pending';
       } else {
         priChip.className = `chip priority-${t.priority}`;
-        priChip.textContent = priLabels[t.priority] || 'Unknown';
+        priChip.textContent = priLabels[t.priority] || t.priority;
       }
       meta.appendChild(priChip);
 
@@ -304,7 +305,7 @@ const app = {
 
     document.getElementById('modal-task-text').textContent = todo.text;
     const fields = document.getElementById('modal-fields');
-    const priLabels = { 1: '🔴 Urgent', 2: '🟠 High', 3: '🟡 Medium', 4: '🟢 Low', 5: '⚪ Someday' };
+    const priLabels = { high: '🟠 High', medium: '🟡 Medium', low: '🟢 Low', someday: '⚪ Someday' };
     const priDisplay = todo.priority != null ? (priLabels[todo.priority] || todo.priority) : '⏳ Pending (unprocessed)';
 
     fields.innerHTML = `

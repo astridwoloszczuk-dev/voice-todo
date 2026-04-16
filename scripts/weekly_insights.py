@@ -74,7 +74,7 @@ def main():
     speed_text = "\n".join(speed_lines) if speed_lines else "  No completed tasks with timing data."
 
     # Priority accuracy: tasks marked urgent that took a long time
-    urgent_done = [t for t in done if t.get("priority") == 1]
+    urgent_done = [t for t in done if t.get("priority") == "high"]
     slow_urgent = []
     for t in urgent_done:
         if t.get("completed_at") and t.get("created_at"):

@@ -35,7 +35,7 @@ def prioritise_unprocessed(supa, ai):
             "role": "user",
             "content": (
                 f"Analyse these tasks. Return a JSON array with fields: "
-                f"id, priority (1=urgent, 2=high, 3=medium, 4=low, 5=someday), "
+                f"id, priority (one of: high, medium, low, someday), "
                 f"category (work/personal/health/finance/household/social/learning/errands/general), "
                 f"notes (max 80 chars, practical comment).\n\n"
                 f"Tasks:\n{tasks_json}\n\nReturn ONLY valid JSON, no other text."
@@ -53,15 +53,15 @@ def prioritise_unprocessed(supa, ai):
     now = datetime.now(timezone.utc).isoformat()
     for u in updates:
         supa.table("todos").update({
-            "priority": u.get("priority", 3),
+            "priority": u.get("priority", "medium"),
             "category": u.get("category", "general"),
             "notes": u.get("notes", ""),
             "processed": 1,
             "updated_at": now
         }).eq("id", u["id"]).execute()
 
-        # Notify immediately for urgent tasks
-        if u.get("priority") == 1:
+        # Notify immediately for high priority tasks
+        if u.get("priority") == "high":
             requests.post(
                 f"https://ntfy.sh/{NTFY_TOPIC}",
                 data=u.get("notes", u["id"]).encode("utf-8"),
@@ -82,11 +82,12 @@ def send_digest(supa, ai):
         return
 
     # Sort: priority (nulls last), then created_at
-    todos.sort(key=lambda t: (t["priority"] or 99, t["created_at"]))
+    PRI_ORDER = {"high": 1, "medium": 2, "low": 3, "someday": 4}
+    todos.sort(key=lambda t: (PRI_ORDER.get(t["priority"], 99), t["created_at"]))
 
     lines = []
     for t in todos:
-        pri = f"P{t['priority']}" if t.get("priority") else "unranked"
+        pri = t.get("priority") or "unranked"
         cat = t.get("category") or "general"
         lines.append(f"- [{pri}] [{cat}] {t['text']}")
     todo_text = "\n".join(lines)
