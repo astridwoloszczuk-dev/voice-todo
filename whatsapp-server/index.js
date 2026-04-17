@@ -365,7 +365,7 @@ Intents:
 - add_todo: The person wants to add a task/todo for themselves (most common)
 - assign_todo: The message starts with a family member's name followed by a colon, e.g. "Max: clean room"
 - complete_todos: The message is purely numbers, e.g. "1", "1 3 5", "done 2" — marking todos as completed
-- diary: The message is about calendar, schedule, appointments, or events (adding, moving, cancelling)
+- diary: The message is about scheduling something at a specific time or date (appointments, events, meetings)
 - unknown: Anything else (greetings, questions, gibberish)
 
 Family members: Astrid (mum), Niko (dad), Max (15), Alex (13), Vicky (11).
@@ -373,8 +373,9 @@ Family members: Astrid (mum), Niko (dad), Max (15), Alex (13), Vicky (11).
 Rules:
 - If the message is ONLY digits and spaces, intent is complete_todos
 - If it starts with a name + colon, intent is assign_todo
-- Calendar/diary/appointment/schedule words → intent is diary
-- Everything else is add_todo
+- DIARY signals (any of these → diary): a time like 3pm/10:30, a day like monday/friday/thursday, words like appointment/meeting/calendar/dentist/doctor/school/party/dinner/lunch/flight/holiday/cancel/move/reschedule
+- Todos are open-ended tasks with no specific time, e.g. "buy milk", "call the plumber"
+- When in doubt between todo and diary: if there's a time or date, it's diary
 
 Respond with ONLY a JSON object, no explanation:
 {"intent": "add_todo", "task": "the todo text"}
