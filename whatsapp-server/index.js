@@ -436,6 +436,58 @@ async function classifyMessage(person, text) {
 const CALENDAR_ID = 'primary';
 const CALENDAR_TIMEZONE = 'Europe/Vienna';
 
+const CONTACTS = {
+  astrid: 'astrid.woloszczuk@outlook.com',
+  me: 'astrid.woloszczuk@outlook.com',
+  alex: 'alexander.woloszczuk@gmail.com',
+  alexander: 'alexander.woloszczuk@gmail.com',
+  victoria: 'victoria.woloszczuk@gmail.com',
+  vicky: 'victoria.woloszczuk@gmail.com',
+  maximilian: 'maximilian.woloszczuk@gmail.com',
+  max: 'maximilian.woloszczuk@gmail.com',
+  niko: 'woloszczuk@stonepeak.com',
+  nik: 'woloszczuk@stonepeak.com',
+  niko_private: 'nwoloszczuk@gmail.com',
+  boys: ['alexander.woloszczuk@gmail.com', 'maximilian.woloszczuk@gmail.com'],
+  kids: ['alexander.woloszczuk@gmail.com', 'maximilian.woloszczuk@gmail.com', 'victoria.woloszczuk@gmail.com'],
+  family: ['astrid.woloszczuk@outlook.com', 'woloszczuk@stonepeak.com', 'alexander.woloszczuk@gmail.com', 'maximilian.woloszczuk@gmail.com', 'victoria.woloszczuk@gmail.com'],
+};
+
+function resolveAttendees(text) {
+  if (!text) return [];
+  const emails = [];
+  const t = text.toLowerCase();
+
+  for (const phrase of ['all 5 of us', 'all of us', 'everyone', 'whole family', 'all family']) {
+    if (t.includes(phrase)) emails.push(...CONTACTS.family);
+  }
+  for (const key of ['family', 'kids', 'boys']) {
+    if (t.includes(key)) {
+      const val = CONTACTS[key];
+      emails.push(...(Array.isArray(val) ? val : [val]));
+    }
+  }
+  if (t.includes('niko private')) {
+    emails.push(CONTACTS.niko_private);
+  } else if (t.includes('niko') || t.includes('nik')) {
+    emails.push(CONTACTS.niko);
+  }
+  for (const alias of ['mum', 'mom', 'mama', 'mother']) {
+    if (t.includes(alias)) { emails.push(CONTACTS.astrid); break; }
+  }
+  for (const alias of ['dad', 'papa', 'father']) {
+    if (t.includes(alias)) { emails.push(CONTACTS.niko); break; }
+  }
+  for (const name of ['astrid', 'me', 'alex', 'alexander', 'victoria', 'vicky', 'maximilian', 'max']) {
+    if (t.includes(name)) {
+      const val = CONTACTS[name];
+      if (val && typeof val === 'string') emails.push(val);
+    }
+  }
+
+  return [...new Set(emails)];
+}
+
 function getCalendarClient() {
   const credPath = process.env.GOOGLE_CREDENTIALS_FILE || path.join(__dirname, 'google-credentials.json');
   const tokenPath = process.env.GOOGLE_TOKEN_FILE || path.join(__dirname, 'google-token.json');
@@ -505,10 +557,10 @@ Today is ${today}.
 Request: ${text}
 
 Return ONLY a JSON object. For adding a one-time event:
-{"action":"add","title":"event title","date":"YYYY-MM-DD","start_time":"HH:MM","end_time":"HH:MM","location":"location or null","description":"extra notes or null","recurrence":null}
+{"action":"add","title":"event title","date":"YYYY-MM-DD","start_time":"HH:MM","end_time":"HH:MM","location":"location or null","attendees_raw":"names as written or null","description":"extra notes or null","recurrence":null}
 
 For adding a recurring event:
-{"action":"add","title":"event title","date":"YYYY-MM-DD","start_time":"HH:MM","end_time":"HH:MM","location":"location or null","description":"extra notes or null","recurrence":{"frequency":"WEEKLY","days":["friday"],"until":"YYYY-MM-DD"}}
+{"action":"add","title":"event title","date":"YYYY-MM-DD","start_time":"HH:MM","end_time":"HH:MM","location":"location or null","attendees_raw":"names as written or null","description":"extra notes or null","recurrence":{"frequency":"WEEKLY","days":["friday"],"until":"YYYY-MM-DD"}}
 
 Recurrence rules:
 - frequency: DAILY, WEEKLY, or MONTHLY
@@ -565,6 +617,7 @@ async function handleDiary(client, person, text) {
       const endTime = parsed.end_time || addOneHour(parsed.start_time);
       const endDt = `${parsed.date}T${endTime}:00`;
       const rrule = buildRrule(parsed.recurrence);
+      const attendees = resolveAttendees(parsed.attendees_raw);
 
       const event = {
         summary: parsed.title,
@@ -574,11 +627,13 @@ async function handleDiary(client, person, text) {
       if (parsed.location) event.location = parsed.location;
       if (parsed.description) event.description = parsed.description;
       if (rrule) event.recurrence = [rrule];
+      if (attendees.length) event.attendees = attendees.map(e => ({ email: e }));
 
       await cal.events.insert({ calendarId: CALENDAR_ID, requestBody: event });
 
       reply = `✅ Done!\n\n*${parsed.title}*\n${parsed.date}  ${parsed.start_time}–${endTime}`;
       if (parsed.location) reply += `\n📍 ${parsed.location}`;
+      if (attendees.length) reply += `\n👥 Invited: ${attendees.join(', ')}`;
       if (rrule && parsed.recurrence) {
         const days = (parsed.recurrence.days || [])
           .map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(', ');
