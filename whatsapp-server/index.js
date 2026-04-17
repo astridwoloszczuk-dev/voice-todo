@@ -4,6 +4,9 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const { createClient } = require('@supabase/supabase-js');
 const Anthropic = require('@anthropic-ai/sdk');
+const { google } = require('googleapis');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -422,6 +425,203 @@ async function classifyMessage(person, text) {
   }
 }
 
+// ── Diary / Google Calendar ──────────────────────────────────────────────────
+const CALENDAR_ID = 'primary';
+const CALENDAR_TIMEZONE = 'Europe/Vienna';
+
+function getCalendarClient() {
+  const credPath = process.env.GOOGLE_CREDENTIALS_FILE || path.join(__dirname, 'google-credentials.json');
+  const tokenPath = process.env.GOOGLE_TOKEN_FILE || path.join(__dirname, 'google-token.json');
+  const credentials = JSON.parse(fs.readFileSync(credPath));
+  const token = JSON.parse(fs.readFileSync(tokenPath));
+  const { client_id, client_secret, redirect_uris } = credentials.installed || credentials.web;
+  const auth = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+  auth.setCredentials(token);
+  auth.on('tokens', (tokens) => {
+    const current = JSON.parse(fs.readFileSync(tokenPath));
+    fs.writeFileSync(tokenPath, JSON.stringify({ ...current, ...tokens }, null, 2));
+  });
+  return google.calendar({ version: 'v3', auth });
+}
+
+function buildRrule(recurrence) {
+  if (!recurrence) return null;
+  const freq = (recurrence.frequency || 'WEEKLY').toUpperCase();
+  const parts = [`FREQ=${freq}`];
+  if (recurrence.days?.length) {
+    const dayMap = { monday:'MO', tuesday:'TU', wednesday:'WE', thursday:'TH',
+                     friday:'FR', saturday:'SA', sunday:'SU' };
+    const byday = recurrence.days.map(d => dayMap[d.toLowerCase()] || d.toUpperCase().slice(0, 2)).join(',');
+    parts.push(`BYDAY=${byday}`);
+  }
+  if (recurrence.until) {
+    parts.push(`UNTIL=${recurrence.until.replace(/-/g, '')}T235959Z`);
+  } else if (recurrence.count) {
+    parts.push(`COUNT=${recurrence.count}`);
+  }
+  return 'RRULE:' + parts.join(';');
+}
+
+function addOneHour(timeStr) {
+  const [h, m] = timeStr.split(':').map(Number);
+  const d = new Date(2000, 0, 1, h, m);
+  d.setHours(d.getHours() + 1);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+async function findCalendarEvents(searchTerm, daysAhead = 60) {
+  const cal = getCalendarClient();
+  const now = new Date();
+  const timeMax = new Date(now.getTime() + daysAhead * 24 * 60 * 60 * 1000);
+  const res = await cal.events.list({
+    calendarId: CALENDAR_ID,
+    q: searchTerm,
+    timeMin: now.toISOString(),
+    timeMax: timeMax.toISOString(),
+    singleEvents: true,
+    orderBy: 'startTime',
+    maxResults: 5,
+  });
+  return res.data.items || [];
+}
+
+async function parseCalendarRequest(person, text) {
+  const today = new Date().toLocaleDateString('en-GB', {
+    weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+    timeZone: CALENDAR_TIMEZONE,
+  });
+
+  const prompt = `You are a calendar assistant. Parse this calendar request into a JSON action.
+
+Today is ${today}.
+
+Request: ${text}
+
+Return ONLY a JSON object. For adding a one-time event:
+{"action":"add","title":"event title","date":"YYYY-MM-DD","start_time":"HH:MM","end_time":"HH:MM","location":"location or null","description":"extra notes or null","recurrence":null}
+
+For adding a recurring event:
+{"action":"add","title":"event title","date":"YYYY-MM-DD","start_time":"HH:MM","end_time":"HH:MM","location":"location or null","description":"extra notes or null","recurrence":{"frequency":"WEEKLY","days":["friday"],"until":"YYYY-MM-DD"}}
+
+Recurrence rules:
+- frequency: DAILY, WEEKLY, or MONTHLY
+- days: list of day names (only for WEEKLY), e.g. ["monday","wednesday"]
+- until: end date as YYYY-MM-DD (use this if a specific end date is given)
+- count: number of occurrences (only if no end date given)
+
+For moving/rescheduling:
+{"action":"move","search_term":"keyword to find event","date":"YYYY-MM-DD","start_time":"HH:MM","end_time":"HH:MM or null"}
+
+For cancelling/deleting:
+{"action":"delete","search_term":"keyword to find event"}
+
+If unclear:
+{"action":"unclear","message":"what is unclear"}
+
+Rules:
+- "this friday" = the coming Friday, even if today is Friday
+- "next tuesday" = Tuesday of next week
+- If no end time, default to 1 hour after start
+- If no title given, infer one from context
+- date = first occurrence date`;
+
+  const response = await ai.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 800,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  let raw = response.content[0].text.trim();
+  raw = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+  return JSON.parse(raw);
+}
+
+async function handleDiary(client, person, text) {
+  let parsed;
+  try {
+    parsed = await parseCalendarRequest(person, text);
+  } catch (e) {
+    console.error(`[${person.name}] Calendar parse error: ${e.message}`);
+    await send(client, person.whatsapp_number,
+      "Sorry, I couldn't understand that. Try something like:\n• add dentist thursday 3pm\n• move tennis to saturday\n• cancel friday appointment");
+    return;
+  }
+
+  const { action } = parsed;
+  let reply;
+
+  try {
+    const cal = getCalendarClient();
+
+    if (action === 'add') {
+      const startDt = `${parsed.date}T${parsed.start_time}:00`;
+      const endTime = parsed.end_time || addOneHour(parsed.start_time);
+      const endDt = `${parsed.date}T${endTime}:00`;
+      const rrule = buildRrule(parsed.recurrence);
+
+      const event = {
+        summary: parsed.title,
+        start: { dateTime: startDt, timeZone: CALENDAR_TIMEZONE },
+        end: { dateTime: endDt, timeZone: CALENDAR_TIMEZONE },
+      };
+      if (parsed.location) event.location = parsed.location;
+      if (parsed.description) event.description = parsed.description;
+      if (rrule) event.recurrence = [rrule];
+
+      await cal.events.insert({ calendarId: CALENDAR_ID, requestBody: event });
+
+      reply = `✅ Done!\n\n*${parsed.title}*\n${parsed.date}  ${parsed.start_time}–${endTime}`;
+      if (parsed.location) reply += `\n📍 ${parsed.location}`;
+      if (rrule && parsed.recurrence) {
+        const days = (parsed.recurrence.days || [])
+          .map(d => d.charAt(0).toUpperCase() + d.slice(1)).join(', ');
+        reply += `\n🔁 Repeats weekly${days ? ' on ' + days : ''}`;
+        if (parsed.recurrence.until) reply += ` until ${parsed.recurrence.until}`;
+      }
+
+    } else if (action === 'move') {
+      const events = await findCalendarEvents(parsed.search_term);
+      if (!events.length) {
+        reply = `Couldn't find an event matching "${parsed.search_term}". No changes made.`;
+      } else {
+        const event = events[0];
+        const startDt = `${parsed.date}T${parsed.start_time}:00`;
+        let endDt;
+        if (parsed.end_time) {
+          endDt = `${parsed.date}T${parsed.end_time}:00`;
+        } else {
+          const duration = new Date(event.end.dateTime) - new Date(event.start.dateTime);
+          endDt = new Date(new Date(startDt).getTime() + duration).toISOString().slice(0, 19);
+        }
+        event.start = { dateTime: startDt, timeZone: CALENDAR_TIMEZONE };
+        event.end = { dateTime: endDt, timeZone: CALENDAR_TIMEZONE };
+        await cal.events.update({ calendarId: CALENDAR_ID, eventId: event.id, requestBody: event });
+        reply = `✅ Moved *${event.summary}* to ${parsed.date} at ${parsed.start_time}.`;
+      }
+
+    } else if (action === 'delete') {
+      const events = await findCalendarEvents(parsed.search_term);
+      if (!events.length) {
+        reply = `Couldn't find an event matching "${parsed.search_term}". Nothing deleted.`;
+      } else {
+        const event = events[0];
+        await cal.events.delete({ calendarId: CALENDAR_ID, eventId: event.id });
+        reply = `✅ Deleted *${event.summary}*.`;
+      }
+
+    } else {
+      reply = `Sorry, I couldn't understand that. Try:\n• add dentist thursday 3pm\n• move tennis to saturday\n• cancel friday appointment`;
+    }
+
+  } catch (e) {
+    console.error(`[${person.name}] Calendar action error: ${e.message}`);
+    reply = `Something went wrong with the calendar. Please try again.`;
+  }
+
+  await send(client, person.whatsapp_number, reply);
+  console.log(`[${person.name}] Diary: ${action} → ${reply.slice(0, 60)}`);
+}
+
 // ── Main inbound handler ─────────────────────────────────────────────────────
 async function handleInbound(client, message) {
   const text = message.body.trim();
@@ -459,10 +659,7 @@ async function handleInbound(client, message) {
     }
 
     case 'diary':
-      // Stub — full diary integration coming soon
-      await send(client, person.whatsapp_number,
-        '📅 Diary integration coming soon! For now, email claude.w.lowndes@gmail.com for calendar requests.');
-      console.log(`[${person.name}] Diary request (stub): ${text.slice(0, 60)}`);
+      await handleDiary(client, person, text);
       break;
 
     case 'add_todo':
