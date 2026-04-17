@@ -213,6 +213,14 @@ def main():
             # Generate personalised intro (falls back to None if API fails)
             intro = generate_intro(ai, person, todos) if todos else None
 
+            # Save intro to person_digests so the PWA can display it
+            if intro:
+                supa.table("person_digests").upsert({
+                    "person_id": person["id"],
+                    "digest_date": today,
+                    "intro_text": intro,
+                }, on_conflict="person_id,digest_date").execute()
+
             # Send digest message
             send_whatsapp(supa, number, format_whatsapp_message(name, todos, intro))
 
