@@ -102,7 +102,7 @@ def generate_intro(ai, person, todos):
 
 
 def build_todo_list(todos):
-    """Format the structured todo list section (used in all messages)."""
+    """Format the structured todo list section with numbers for completion replies."""
     if not todos:
         return ""
 
@@ -113,15 +113,19 @@ def build_todo_list(todos):
         p = t.get("priority") or "someday"
         by_priority.setdefault(p, []).append(t)
 
+    # Todos are pre-sorted by priority — number them in that order
+    counter = 1
     for level in ["high", "medium", "low", "someday"]:
         items = by_priority.get(level, [])
         if not items:
             continue
         lines.append(f"*{labels[level]}*")
         for t in items:
-            lines.append(f"• {t['text']}")
+            lines.append(f"{counter}. {t['text']}")
+            counter += 1
         lines.append("")
 
+    lines.append("_Reply with numbers to tick off, e.g. 1 3_")
     return "\n".join(lines).strip()
 
 
