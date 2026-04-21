@@ -27,7 +27,6 @@ const emptyState  = document.getElementById('empty-state');
 const userModal   = document.getElementById('user-modal');
 const userNameEl  = document.getElementById('user-name-input');
 const userSaveBtn = document.getElementById('user-save-btn');
-const assignPills = document.getElementById('assign-pills');
 const tabBar      = document.getElementById('tab-bar');
 const modalNames  = document.getElementById('modal-names');
 
@@ -52,23 +51,6 @@ MEMBERS.forEach(name => {
   modalNames.appendChild(mb);
 });
 
-// ── Build assign pills ────────────────────────────────────────────────────────
-function buildAssignPills() {
-  assignPills.innerHTML = '';
-  assignPills.style.cssText = 'display:flex;gap:6px;flex:1;';
-  MEMBERS.forEach(name => {
-    const p = document.createElement('button');
-    p.className = 'member-pill' + (name === addTarget ? ' selected' : '');
-    p.style.background = COLORS[name];
-    p.textContent = INITIALS[name];
-    p.dataset.member = name;
-    p.addEventListener('click', () => {
-      addTarget = name;
-      buildAssignPills();
-    });
-    assignPills.appendChild(p);
-  });
-}
 
 // ── User setup ────────────────────────────────────────────────────────────────
 function showUserModal() { userModal.classList.remove('hidden'); userNameEl.focus(); }
@@ -92,7 +74,6 @@ function setTab(name) {
   document.querySelectorAll('.tab-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.member === name)
   );
-  buildAssignPills();
   expandedId = null;
   renderList();
 }
@@ -339,7 +320,6 @@ if (!SpeechRecognition) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 if (!currentUser) { showUserModal(); } else { userBadge.textContent = currentUser; }
-buildAssignPills();
 setTab(currentTab);
 loadItems();
 
