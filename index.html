@@ -1,50 +1,458 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0f0f0f">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="Family Todos">
-<title>Family Todos</title>
-<link rel="manifest" href="./manifest.json">
-<link rel="stylesheet" href="./style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#16a34a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Family Todos</title>
+  <link rel="manifest" href="./manifest.json" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green:    #16a34a;
+      --green-lt: #dcfce7;
+      --red:      #dc2626;
+      --amber:    #d97706;
+      --blue:     #2563eb;
+      --gray-50:  #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-900: #111827;
+      --tab-h:    56px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--gray-50);
+      color: var(--gray-900);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom));
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--green);
+      color: white;
+      padding: 0 16px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 1px 3px rgba(0,0,0,.15);
+    }
+    .app-title { font-size: 1.05rem; font-weight: 700; }
+
+    #user-badge {
+      font-size: .8rem;
+      background: rgba(255,255,255,.2);
+      border: none;
+      color: white;
+      padding: 4px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      max-width: 110px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #user-badge:hover { background: rgba(255,255,255,.3); }
+
+    /* ── Add bar ── */
+    .add-bar {
+      background: white;
+      border-bottom: 1px solid var(--gray-200);
+      padding: 10px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: sticky;
+      top: 56px;
+      z-index: 9;
+    }
+    .add-row { display: flex; gap: 8px; }
+
+    #item-input {
+      flex: 1;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 1rem;
+      outline: none;
+      background: var(--gray-50);
+      transition: border-color .15s;
+    }
+    #item-input:focus { border-color: var(--green); background: white; }
+    #item-input::placeholder { color: var(--gray-400); }
+
+    #mic-btn {
+      width: 44px; min-width: 44px;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 10px;
+      background: white;
+      color: var(--gray-400);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color .15s, color .15s, background .15s;
+    }
+    #mic-btn svg { width: 18px; height: 18px; }
+    #mic-btn:hover { border-color: var(--green); color: var(--green); }
+    #mic-btn.listening {
+      border-color: var(--red); color: var(--red); background: #fee2e2;
+      animation: pulse .8s ease-in-out infinite alternate;
+    }
+    @keyframes pulse {
+      from { box-shadow: 0 0 0 0 rgba(220,38,38,.3); }
+      to   { box-shadow: 0 0 0 6px rgba(220,38,38,0); }
+    }
+
+    #add-btn {
+      width: 44px; min-width: 44px;
+      background: var(--green);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1.5rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .15s;
+    }
+    #add-btn:hover { background: #15803d; }
+
+    .assign-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .8rem;
+      color: var(--gray-600);
+    }
+    .assign-row label { white-space: nowrap; }
+    #assign-select {
+      flex: 1;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 8px;
+      padding: 5px 8px;
+      font-size: .85rem;
+      background: var(--gray-50);
+      outline: none;
+      cursor: pointer;
+    }
+    #assign-select:focus { border-color: var(--green); }
+
+    /* ── List ── */
+    main { flex: 1; padding: 12px 0 16px; }
+
+    #item-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .section-header {
+      padding: 10px 16px 4px;
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--gray-400);
+    }
+    .section-header.pending-accept { color: var(--amber); }
+    .section-header.waiting        { color: var(--blue); }
+
+    .item {
+      background: white;
+      display: flex;
+      align-items: center;
+      padding: 11px 16px;
+      gap: 10px;
+      animation: slideIn .12s ease;
+    }
+    .item:first-of-type { border-radius: 12px 12px 0 0; }
+    .item:last-of-type  { border-radius: 0 0 12px 12px; }
+    .item.waiting       { opacity: .7; }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .check-btn {
+      width: 26px; height: 26px; min-width: 26px;
+      border-radius: 50%;
+      border: 2px solid var(--gray-200);
+      background: white;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: white;
+      transition: border-color .15s, background .15s;
+    }
+    .check-btn svg { width: 14px; height: 14px; }
+    .check-btn:hover { border-color: var(--green); }
+
+    .item-body { flex: 1; min-width: 0; }
+    .item-name {
+      display: block;
+      font-size: .95rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .item-meta {
+      display: block;
+      font-size: .72rem;
+      color: var(--gray-400);
+      margin-top: 2px;
+    }
+
+    .badge {
+      font-size: .7rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .badge.prio   { background: var(--green-lt); color: var(--green); }
+    .badge.unprio { color: var(--gray-200); font-size: 1rem; font-weight: 400; }
+
+    .accept-btn {
+      font-size: .75rem;
+      font-weight: 600;
+      background: var(--amber);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 4px 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .accept-btn:hover { background: #b45309; }
+
+    .delete-btn {
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--gray-400);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0;
+      transition: opacity .15s, background .15s, color .15s;
+    }
+    .delete-btn svg { width: 14px; height: 14px; }
+    .item:hover .delete-btn { opacity: 1; }
+    .delete-btn:hover { background: #fee2e2; color: var(--red); }
+
+    /* ── Empty state ── */
+    #empty-state {
+      text-align: center;
+      padding: 56px 24px;
+      color: var(--gray-400);
+    }
+    #empty-state .empty-icon { font-size: 2.5rem; margin-bottom: 10px; }
+    #empty-state p { font-size: .9rem; }
+    #empty-state.hidden { display: none; }
+
+    /* ── Tab bar ── */
+    .tab-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0; right: 0;
+      height: calc(var(--tab-h) + env(safe-area-inset-bottom));
+      padding-bottom: env(safe-area-inset-bottom);
+      background: white;
+      border-top: 1px solid var(--gray-200);
+      display: flex;
+      z-index: 20;
+    }
+    .tab-btn {
+      flex: 1;
+      border: none;
+      background: transparent;
+      color: var(--gray-400);
+      font-size: .75rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      transition: color .15s;
+      padding: 0;
+    }
+    .tab-btn .tab-initial {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: var(--gray-100);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .85rem;
+      font-weight: 700;
+      transition: background .15s, color .15s;
+    }
+    .tab-btn.active { color: var(--green); }
+    .tab-btn.active .tab-initial { background: var(--green-lt); color: var(--green); }
+
+    /* ── User modal ── */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.4);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+      padding: 24px;
+    }
+    .modal-backdrop.hidden { display: none; }
+    .modal {
+      background: white;
+      border-radius: 16px;
+      padding: 28px 24px;
+      width: 100%; max-width: 340px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.2);
+    }
+    .modal h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 6px; }
+    .modal p  { font-size: .85rem; color: var(--gray-600); margin-bottom: 16px; }
+    .modal-names {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin-bottom: 16px;
+    }
+    .modal-name-btn {
+      flex: 1; min-width: 80px;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 8px;
+      font-size: .9rem;
+      font-weight: 500;
+      background: white;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .modal-name-btn:hover { border-color: var(--green); background: var(--green-lt); color: var(--green); }
+    .modal-divider { text-align: center; font-size: .8rem; color: var(--gray-400); margin-bottom: 12px; }
+    .modal input {
+      width: 100%;
+      border: 1.5px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 1rem;
+      outline: none;
+      margin-bottom: 12px;
+    }
+    .modal input:focus { border-color: var(--green); }
+    .modal button.save-btn {
+      width: 100%;
+      background: var(--green); color: white;
+      border: none; border-radius: 10px;
+      padding: 12px; font-size: 1rem; font-weight: 600;
+      cursor: pointer;
+    }
+    .modal button.save-btn:hover { background: #15803d; }
+  </style>
 </head>
 <body>
 
-<!-- Who are you? screen -->
-<div id="screen-pick" class="screen hidden">
-  <div class="pick-wrap">
-    <p class="pick-label">Who are you?</p>
-    <div id="pick-list" class="pick-list"></div>
-  </div>
-</div>
-
-<!-- Main screen -->
-<div id="screen-main" class="screen hidden">
+  <!-- Header -->
   <header>
-    <span id="header-name"></span>
-    <button class="switch-btn" onclick="app.switchPerson()" title="Switch person">&#8645;</button>
+    <div class="app-title">✅ Family Todos</div>
+    <button id="user-badge">Set name</button>
   </header>
 
-  <div id="intro-card" class="intro-card hidden">
-    <p id="intro-text"></p>
+  <!-- Add bar -->
+  <div class="add-bar">
+    <div class="add-row">
+      <input id="item-input" type="text" placeholder="Add todo…" autocomplete="off" autocorrect="off" />
+      <button id="mic-btn" aria-label="Voice input">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="12" rx="3"/>
+          <path d="M5 10a7 7 0 0 0 14 0"/>
+          <line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="9" y1="22" x2="15" y2="22"/>
+        </svg>
+      </button>
+      <button id="add-btn" aria-label="Add">+</button>
+    </div>
+    <div class="assign-row">
+      <label for="assign-select">For:</label>
+      <select id="assign-select">
+        <option>Astrid</option>
+        <option>Niko</option>
+        <option>Max</option>
+        <option>Alex</option>
+        <option>Vicky</option>
+      </select>
+    </div>
   </div>
 
-  <div id="todo-list"></div>
+  <!-- List -->
+  <main>
+    <ul id="item-list"></ul>
+    <div id="empty-state">
+      <div class="empty-icon">🎉</div>
+      <p>All done! Nothing on the list.</p>
+    </div>
+  </main>
 
-  <div id="empty-state" class="empty-state hidden">
-    <p>All done! 🎉</p>
-    <p class="muted">Add tasks via WhatsApp.</p>
+  <!-- Tab bar -->
+  <nav class="tab-bar">
+    <button class="tab-btn" data-member="Astrid">
+      <span class="tab-initial">A</span>
+      <span>Astrid</span>
+    </button>
+    <button class="tab-btn" data-member="Niko">
+      <span class="tab-initial">N</span>
+      <span>Niko</span>
+    </button>
+    <button class="tab-btn" data-member="Max">
+      <span class="tab-initial">M</span>
+      <span>Max</span>
+    </button>
+    <button class="tab-btn" data-member="Alex">
+      <span class="tab-initial">A</span>
+      <span>Alex</span>
+    </button>
+    <button class="tab-btn" data-member="Vicky">
+      <span class="tab-initial">V</span>
+      <span>Vicky</span>
+    </button>
+  </nav>
+
+  <!-- Name modal -->
+  <div id="user-modal" class="modal-backdrop hidden">
+    <div class="modal">
+      <h2>Who are you? 👋</h2>
+      <p>Tap your name or type it below.</p>
+      <div class="modal-names">
+        <button class="modal-name-btn">Astrid</button>
+        <button class="modal-name-btn">Niko</button>
+        <button class="modal-name-btn">Max</button>
+        <button class="modal-name-btn">Alex</button>
+        <button class="modal-name-btn">Vicky</button>
+      </div>
+      <div class="modal-divider">or type a name</div>
+      <input id="user-name-input" type="text" placeholder="Your name" maxlength="30" />
+      <button class="save-btn" id="user-save-btn">Save</button>
+    </div>
   </div>
 
-  <button class="refresh-btn" onclick="app.load()" title="Refresh">↻</button>
-</div>
-
-<div id="toast" class="toast hidden"></div>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="./app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="./app.js"></script>
+  <script>
+    // Quick-pick name buttons in modal
+    document.querySelectorAll('.modal-name-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('user-name-input').value = btn.textContent;
+        document.getElementById('user-save-btn').click();
+      });
+    });
+  </script>
 </body>
 </html>
