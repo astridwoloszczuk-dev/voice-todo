@@ -120,7 +120,7 @@ async function loadBirthdays() {
   const todayISO = new Date().toISOString().slice(0, 10);
   const [bRes, aRes] = await Promise.all([
     db.from('birthdays').select('*').order('birth_date'),
-    db.from('birthday_acks').select('birthday_id').eq('ack_date', todayISO),
+    db.from('birthday_acks').select('birthday_id').eq('ack_date', todayISO).eq('acked_by', currentUser || 'unknown'),
   ]);
   birthdays = bRes.data || [];
   bdayAcks  = new Set((aRes.data || []).map(r => r.birthday_id));
@@ -163,7 +163,8 @@ function renderBirthdays() {
   bdayListEl.querySelectorAll('.bday-ack-btn:not(.acked)').forEach(btn => {
     btn.addEventListener('click', async () => {
       const todayISO = new Date().toISOString().slice(0, 10);
-      await db.from('birthday_acks').upsert({ birthday_id: Number(btn.dataset.id), ack_date: todayISO, acked_by: currentUser }, { onConflict: 'birthday_id,ack_date' });
+      const by = currentUser || 'unknown';
+      await db.from('birthday_acks').upsert({ birthday_id: Number(btn.dataset.id), ack_date: todayISO, acked_by: by }, { onConflict: 'birthday_id,ack_date,acked_by' });
     });
   });
 

@@ -74,17 +74,18 @@ def main():
         birthdays = resp.data or []
 
         for bday in birthdays:
-            # Check if already acked today
-            ack = supa.table("birthday_acks").select("id").eq("birthday_id", bday["id"]).eq("ack_date", today.isoformat()).execute()
-            if ack.data:
-                print(f"  {bday['name']}'s birthday already acked — skipping.")
-                continue
-
             # Who should be reminded?
             rem = supa.table("birthday_reminders").select("person_name").eq("birthday_id", bday["id"]).execute()
             recipients = [r["person_name"] for r in (rem.data or [])]
 
+            # Fetch all acks for this birthday today (per person)
+            acks = supa.table("birthday_acks").select("acked_by").eq("birthday_id", bday["id"]).eq("ack_date", today.isoformat()).execute()
+            acked_by = {r["acked_by"] for r in (acks.data or [])}
+
             for person in recipients:
+                if person in acked_by:
+                    print(f"  {person} already acked {bday['name']}'s birthday — skipping.")
+                    continue
                 number = get_whatsapp_number(supa, person)
                 if not number:
                     print(f"  No WhatsApp number for {person} — skipping.")
