@@ -4,16 +4,13 @@
 import os
 from datetime import date, datetime, timezone
 
-import anthropic
 import requests
 from supabase import create_client
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_SERVICE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")  # optional — skips intros if missing
 NTFY_TOPIC = os.environ["NTFY_TOPIC"]
 
-# Ages used to calibrate tone in the personalised intro
 CHILD_AGES = {
     "Max": 15,
     "Alex": 13,
@@ -21,6 +18,9 @@ CHILD_AGES = {
 }
 
 PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2, "someday": 3}
+
+SHARED_LABEL = "Astrid & Niko"
+SHARED_MEMBERS = {"Astrid", "Niko"}
 
 
 def get_person_todos(supa, person_id):
@@ -31,6 +31,20 @@ def get_person_todos(supa, person_id):
         .eq("assigned_to", person_id)
         .eq("status", "pending")
         .eq("assignment_status", "accepted")
+        .execute()
+    )
+    todos = resp.data or []
+    todos.sort(key=lambda t: PRIORITY_ORDER.get(t.get("priority"), 99))
+    return todos
+
+
+def get_shared_todos(supa):
+    """Fetch pending todos owned by 'Astrid & Niko' for inclusion in both parents' digests."""
+    resp = (
+        supa.table("todos")
+        .select("id, text, priority, priority_reasoning, notes")
+        .eq("owner", SHARED_LABEL)
+        .eq("status", "pending")
         .execute()
     )
     todos = resp.data or []
@@ -55,50 +69,15 @@ def format_whatsapp_message(name, todos, intro=None):
     return "\n".join(parts).strip()
 
 
-def generate_intro(ai, person, todos):
-    """Ask Claude to write a short personalised intro paragraph for this person's digest."""
-    name = person["name"]
-    role = person.get("role", "parent")
-    age = CHILD_AGES.get(name)
-
-    if role == "parent":
-        tone_guidance = f"{name} is a parent. Be direct and concise — they want the headline, not a pep talk."
-    else:
-        tone_guidance = (
-            f"{name} is {age} years old. Use a friendly, age-appropriate tone. "
-            f"Keep it short and warm, not preachy."
-        )
-
-    todo_lines = []
-    for t in todos:
-        reasoning = t.get("priority_reasoning") or ""
-        notes = t.get("notes") or ""
-        extra = f" ({reasoning})" if reasoning else ""
-        extra += f" — note: {notes}" if notes else ""
-        todo_lines.append(f"  [{t.get('priority', '?')}] {t['text']}{extra}")
-    todo_text = "\n".join(todo_lines) if todo_lines else "  (no todos)"
-
-    prompt = (
-        f"{tone_guidance}\n\n"
-        f"Write a single short paragraph (2–3 sentences max) as the opening of a WhatsApp morning "
-        f"message for {name}. It should:\n"
-        f"- Acknowledge the most important thing on their list today (use the priority_reasoning if helpful)\n"
-        f"- Be warm but not over the top\n"
-        f"- NOT repeat or list the todos — the full list follows immediately after\n\n"
-        f"Their todos:\n{todo_text}\n\n"
-        f"Return only the paragraph, no greeting, no sign-off."
-    )
-
+def get_stored_blurb(supa, name):
+    """Fetch the pre-generated blurb for this person from the morning prioritise run."""
     try:
-        msg = ai.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=120,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return msg.content[0].text.strip()
+        resp = supa.table("person_blurbs").select("blurb").eq("person_name", name).execute()
+        if resp.data:
+            return resp.data[0]["blurb"]
     except Exception as e:
-        print(f"  Claude intro failed for {name}: {e} — using static format only.")
-        return None
+        print(f"  Blurb lookup failed for {name}: {e}")
+    return None
 
 
 def build_todo_list(todos):
@@ -174,7 +153,6 @@ def send_ntfy_summary(topic, people_summaries, total_todos):
 
 def main():
     supa = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    ai = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
     today = date.today().isoformat()
 
     # Guard: skip if digest already ran today
@@ -193,12 +171,15 @@ def main():
 
     people_summaries = []
     total_todos = 0
+    shared_todos = get_shared_todos(supa)
 
     try:
         for person in people:
             name = person["name"]
             number = person.get("whatsapp_number")
             todos = get_person_todos(supa, person["id"])
+            if name in SHARED_MEMBERS and shared_todos:
+                todos = sorted(todos + shared_todos, key=lambda t: PRIORITY_ORDER.get(t.get("priority"), 99))
 
             count = len(todos)
             high_count = sum(1 for t in todos if t.get("priority") == "high")
@@ -210,16 +191,8 @@ def main():
                 print(f"  No WhatsApp number for {name} — skipping send.")
                 continue
 
-            # Generate personalised intro (falls back to None if API fails)
-            intro = generate_intro(ai, person, todos) if todos else None
-
-            # Save intro to person_digests so the PWA can display it
-            if intro:
-                supa.table("person_digests").upsert({
-                    "person_id": person["id"],
-                    "digest_date": today,
-                    "intro_text": intro,
-                }, on_conflict="person_id,digest_date").execute()
+            # Use pre-generated blurb from morning prioritise run
+            intro = get_stored_blurb(supa, name) if todos else None
 
             # Send digest message
             send_whatsapp(supa, number, format_whatsapp_message(name, todos, intro))

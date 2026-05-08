@@ -2,9 +2,9 @@
 const SUPABASE_URL  = 'https://mezayharkjyvnnhvdlww.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1lemF5aGFya2p5dm5uaHZkbHd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwOTE2ODQsImV4cCI6MjA5MTY2NzY4NH0.GlyIlgobMa0lVjEhH59-Zu1mt3f_usAipFNsg0bJSqE';
 
-const MEMBERS = ['Astrid', 'Niko', 'Max', 'Alex', 'Vicky'];
-const COLORS  = { Astrid: '#d97706', Niko: '#dc2626', Max: '#16a34a', Alex: '#2563eb', Vicky: '#db2777' };
-const INITIALS = { Astrid: 'As', Niko: 'N', Max: 'M', Alex: 'Al', Vicky: 'V' };
+const MEMBERS = ['Astrid', 'Niko', 'Max', 'Alex', 'Vicky', 'Astrid & Niko'];
+const COLORS  = { Astrid: '#d97706', Niko: '#dc2626', Max: '#16a34a', Alex: '#2563eb', Vicky: '#db2777', 'Astrid & Niko': '#7c3aed' };
+const INITIALS = { Astrid: 'As', Niko: 'N', Max: 'M', Alex: 'Al', Vicky: 'V', 'Astrid & Niko': 'A+N' };
 
 // ── Supabase ─────────────────────────────────────────────────────────────────
 const { createClient } = supabase;
@@ -51,15 +51,17 @@ MEMBERS.forEach(name => {
   btn.addEventListener('click', () => setTab(name));
   tabBar.appendChild(btn);
 
-  // Modal name button
-  const mb = document.createElement('button');
-  mb.className = 'modal-name-btn';
-  mb.textContent = name;
-  mb.addEventListener('click', () => {
-    userNameEl.value = name;
-    userSaveBtn.click();
-  });
-  modalNames.appendChild(mb);
+  // Modal name button (skip shared tab — not a real user)
+  if (name !== 'Astrid & Niko') {
+    const mb = document.createElement('button');
+    mb.className = 'modal-name-btn';
+    mb.textContent = name;
+    mb.addEventListener('click', () => {
+      userNameEl.value = name;
+      userSaveBtn.click();
+    });
+    modalNames.appendChild(mb);
+  }
 });
 
 
@@ -409,11 +411,12 @@ async function addItem() {
   const text = inputEl.value.trim();
   if (!text) return;
   const isSelf = addTarget === currentUser;
+  const isShared = addTarget === 'Astrid & Niko';
   inputEl.value = '';
   inputEl.focus();
   const { error } = await db.from('todos').insert({
     text, owner: addTarget, added_by_name: currentUser,
-    status: 'pending', assignment_status: isSelf ? null : 'pending',
+    status: 'pending', assignment_status: isShared ? 'accepted' : (isSelf ? null : 'pending'),
   });
   if (error) { console.error(error); inputEl.value = text; }
 }
